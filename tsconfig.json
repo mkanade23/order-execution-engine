@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+  
+      "types": ["node", "jest"]   // 👈 ADD ONLY THIS
+    }
+  }
+  
