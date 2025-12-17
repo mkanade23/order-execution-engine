@@ -1,7 +1,11 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 
-export const redis = new Redis(process.env.REDIS_URL!, {
+if (!process.env.REDIS_URL) {
+  throw new Error("REDIS_URL is not set");
+}
+
+export const redis = new Redis(process.env.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
@@ -14,3 +18,4 @@ export const orderQueue = new Queue("orders", {
     removeOnFail: true,
   },
 });
+
