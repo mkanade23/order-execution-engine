@@ -1,23 +1,23 @@
-import { Worker } from "bullmq";
+import { Worker, Job } from "bullmq";
 import { MockDexRouter } from "../dex/mockDexRouter";
-import { redis } from "../config/redis"
+import { redis } from "./redis";
 import { emitStatus } from "../services/order.service";
 import { Order } from "../types/order";
 
 const dex = new MockDexRouter();
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const orderWorker = new Worker(
   "orders",
-  async (job) => {
+  async (job: Job) => {
     const { orderId } = job.data as { orderId: string };
 
     try {
+      // 1️⃣ routing
       await sleep(3000);
-      emitStatus(orderId, "routing");
+      await emitStatus(orderId, "routing");
 
       const raydium = await dex.getRaydiumQuote();
       const meteora = await dex.getMeteoraQuote();
@@ -25,35 +25,44 @@ export const orderWorker = new Worker(
       const selectedDex: NonNullable<Order["dex"]> =
         raydium.price > meteora.price ? "Raydium" : "Meteora";
 
+      // 2️⃣ building
       await sleep(3000);
-      emitStatus(orderId, "building", { dex: selectedDex });
+      await emitStatus(orderId, "building", { dex: selectedDex });
 
+      // 3️⃣ submitted
       await sleep(3000);
-      emitStatus(orderId, "submitted");
+      await emitStatus(orderId, "submitted");
 
+      // 4️⃣ execute
       const result = await dex.executeSwap(selectedDex);
 
+      // 5️⃣ confirmed
       await sleep(3000);
-      emitStatus(orderId, "confirmed", {
+      await emitStatus(orderId, "confirmed", {
         dex: selectedDex,
         txHash: result.txHash,
         executedPrice: result.executedPrice,
       });
     } catch (err: any) {
-      emitStatus(orderId, "failed", {
+      // ❌ failed
+      await emitStatus(orderId, "failed", {
         error: err?.message || "Execution failed",
       });
-      throw err; // ✅ important for retries
+
+      // IMPORTANT: rethrow so BullMQ retries
+      throw err;
     }
   },
   {
     connection: redis,
+
+    // 🔥 concurrency requirement
     concurrency: 10,
 
-    // ✅ THIS IS CORRECT (meets doc requirement)
+    // 🔥 rate limit: 100 orders / minute
     limiter: {
-      max: 100,       // 100 jobs
-      duration: 60_000, // per minute
+      max: 100,
+      duration: 60_000,
     },
   }
 );

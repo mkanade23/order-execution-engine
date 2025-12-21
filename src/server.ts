@@ -3,6 +3,7 @@ dotenv.config();
 
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
+import "./queue/order.worker";
 
 import "./queue/order.worker";
 import { orderRoutes } from "./routes/order.routes";
